@@ -10,7 +10,7 @@ const CategoryWallpapers = () => {
   const [wallpapers, setWallpapers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [categoryName, setCategoryName] = useState(urlCategoryName || 'Category');
+  const [categoryName] = useState(urlCategoryName || 'Category');
   const [activeSidebarItem, setActiveSidebarItem] = useState('Gallery');
 
   const navigate = useNavigate();

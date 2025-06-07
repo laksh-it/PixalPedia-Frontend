@@ -60,15 +60,6 @@ import MobileForgotpassword from './components/Mobile/Mobauth/Forgotpassword';
 import MobileResetpassword from './components/Mobile/Mobauth/Resetpassword';
 import MobileConfirmemail from './components/Mobile/Mobauth/Confirmemail';
 
-  // You can also assign the variable:
-  const backendUrl = process.env.REACT_APP_BACKEND_URL;
-  
-// Placeholder components for mobile/tablet versions
-// You will replace these with your actual mobile/tablet-specific componentsx
-const TabletHome = () => <div>Tablet Home Page</div>;
-const TabletLogin = () => <div>Tablet Login Page</div>;
-
-
 function App() {
   return (
     <Router>
