@@ -48,7 +48,7 @@ export function generateTSToken() {
  *
  * @param {string} url - The API endpoint to call.
  * @param {object} [options={}] - Optional custom fetch options and headers.
- * @returns {Promise<object|null>} - The JSON response or null if an error occurred.
+ * @returns {Promise<object|{status: number, message: string}|null>} - The JSON response, a special object for 304, or null if an error occurred.
  */
 export default async function wrapperFetch(url, options = {}) {
   // Generate a fresh TS token.
@@ -118,6 +118,14 @@ export default async function wrapperFetch(url, options = {}) {
   try {
     const response = await fetch(url, finalOptions);
 
+    // --- CRITICAL ADDITION: Handle 304 Not Modified status ---
+    if (response.status === 304) {
+      console.log(`Resource at ${url} not modified. Using cached version.`);
+      // Return a specific object to signal 304, so the calling component can handle it.
+      return { status: 304, message: "Not Modified" };
+    }
+    // --- END CRITICAL ADDITION ---
+
     if (response.status === 401) {
       console.warn("Unauthorized request. Auth or session token might be expired or invalid. Redirecting to /.");
       // Clear all relevant tokens and user data on 401
@@ -130,12 +138,25 @@ export default async function wrapperFetch(url, options = {}) {
       return null;
     }
     if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText} (Status: ${response.status})`);
+      // For other non-OK statuses (e.g., 400, 403, 500) that *do* have a body.
+      // Attempt to parse JSON for more detailed error messages if available.
+      let errorData = {};
+      try {
+        errorData = await response.json(); // Attempt to parse JSON error body
+      } catch (e) {
+        // If parsing JSON fails, it's likely a non-JSON error response or empty body
+        console.warn(`Could not parse error JSON for status ${response.status}:`, e);
+      }
+      throw new Error(
+        `API Error: ${response.statusText} (Status: ${response.status})${errorData.message ? ` - ${errorData.message}` : ''}`
+      );
     }
 
+    // Only parse JSON if the response status is OK (200-299) and not 304
     return await response.json();
   } catch (error) {
     console.error("Fetch Error:", error);
+    // You might want more specific error handling here based on the type of error
     return null;
   }
 }
