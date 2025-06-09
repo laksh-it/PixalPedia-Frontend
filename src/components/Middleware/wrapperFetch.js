@@ -39,11 +39,12 @@ export function generateTSToken() {
  *
  * For public pages ("/login", "/signup", "/Forgotpassword", "/Resetpassword", "/Confirmemail"),
  * only two headers are sent: a TS token (ts header) and a login header with value "false".
- * For protected pages, the user data is verified and additional authentication headers are added.
- * The default headers for protected pages do NOT forcibly include "Content-Type": "application/json"
- * so that requests with multi-part form data or other content types can supply their own.
- * If user data is missing on a protected page or the API returns a 401 error,
- * the user is redirected to the `/loading` page.
+ * For protected pages, the user data and authentication tokens are retrieved from localStorage
+ * and added to the request headers. The default headers for protected pages do NOT forcibly
+ * include "Content-Type": "application/json" so that requests with multi-part form data
+ * or other content types can supply their own.
+ * If user data, authToken, or sessionToken is missing on a protected page or the API returns a 401 error,
+ * the user is redirected to the `/` page.
  *
  * @param {string} url - The API endpoint to call.
  * @param {object} [options={}] - Optional custom fetch options and headers.
@@ -60,12 +61,6 @@ export default async function wrapperFetch(url, options = {}) {
     "/desktop/Forgotpassword",
     "/desktop/Resetpassword",
     "/desktop/Confirmemail",
-    // Adding mobile paths for thoroughness as you have them in your app
-    "/mobile/login",
-    "/mobile/signup",
-    "/mobile/Forgotpassword",
-    "/mobile/Resetpassword",
-    "/mobile/Confirmemail",
   ];
   const currentPath = window.location.pathname;
   const isPublicPage = publicPaths.includes(currentPath);
@@ -77,84 +72,70 @@ export default async function wrapperFetch(url, options = {}) {
     defaultHeaders = {
       ts: tsToken,
       login: "false",
-      // Include Content-Type for public pages that might send JSON bodies (e.g., login/signup)
-      "Content-Type": "application/json",
     };
   } else {
-    // For protected pages, retrieve the required user data and tokens.
+    // For protected pages, retrieve the required user data and auth/session tokens.
     const userId = localStorage.getItem("userId");
-    const authToken = localStorage.getItem("authToken"); // Retrieve authToken
+    const email = localStorage.getItem("email");
+    const username = localStorage.getItem("username");
+    const authToken = localStorage.getItem("authToken");   // Retrieve authToken
     const sessionToken = localStorage.getItem("sessionToken"); // Retrieve sessionToken
 
-    // Updated isAuthenticated check to rely on the actual tokens
-    const isAuthenticated = Boolean(userId && authToken && sessionToken);
+    // isAuthenticated now also depends on the presence of both tokens
+    const isAuthenticated = Boolean(userId && email && username && authToken && sessionToken);
 
     if (!isAuthenticated) {
-      console.warn("Authentication tokens missing on a protected page. Redirecting to login.");
-      // Redirect to the appropriate login page based on current path, or a general base login
-      const baseLoginPath = currentPath.startsWith('/mobile') ? '/mobile/login' : '/desktop/login';
-      window.location.href = baseLoginPath;
+      console.warn("User not logged in, or auth/session token missing on a protected page. Redirecting to /.");
+      window.location.href = "/"; // Redirect to home/login page
       return null;
     }
 
-    // Include userId and authentication headers using the tokens from localStorage.
+    // Include userId, authentication headers, and the Authorization token.
     defaultHeaders = {
       ts: tsToken,
-      "x-user-id": userId, // Continue sending user ID
-      // Send the authToken in the Authorization header (Bearer token scheme)
-      "Authorization": `Bearer ${authToken}`,
-      // Send the sessionToken in a custom header
-      "X-Session-Token": sessionToken,
-      login: "true", // Keep existing 'login' header
-      // Add default Content-Type for protected pages, can be overridden by options.headers
-      "Content-Type": "application/json",
+      login: "true",
+      "x-user-id": userId,
+      // Standard way to send JWT/Bearer tokens
+      'Authorization': `Bearer ${authToken}`,
+      // Custom header for session token, adjust 'X-Session-Token' if your backend expects a different name
+      'X-Session-Token': sessionToken,
     };
   }
 
-  // Merge default options.
-  // CRITICAL CHANGE: Remove 'credentials: "include"' here if you are NO LONGER using HTTP-only cookies
-  // for primary authentication tokens and are relying SOLELY on localStorage + headers.
-  // Set to 'omit' to ensure no unnecessary cookies are sent with requests meant for token-based auth.
   const finalOptions = {
-    ...options, // Spread any options passed in
+    ...options, // Spread existing options first
     headers: {
-      ...defaultHeaders, // Start with the headers determined above
-      ...(options.headers || {}), // Merge any custom headers from the options parameter
+      ...defaultHeaders, // Default headers (including Authorization and X-Session-Token) go first
+      ...(options.headers || {}), // Any custom headers from options override defaults
     },
-    // The previous defaultOptions had credentials: "include". We are overriding/removing it.
-    // If you explicitly want to NOT send cookies with these requests, use 'omit'.
-    credentials: 'omit' // Explicitly tells the browser NOT to send cookies automatically.
-                        // This aligns with your choice to use localStorage tokens.
   };
+
+  // Explicitly remove credentials if it's somehow passed in options to prevent cookie sending
+  if (finalOptions.credentials) {
+    delete finalOptions.credentials;
+  }
 
   try {
     const response = await fetch(url, finalOptions);
 
-    // Global 401/403 unauthorized handling.
-    if (response.status === 401 || response.status === 403) {
-      console.warn("Unauthorized or Forbidden request. Logging out user.");
-      // Clear all authentication-related localStorage items
-      localStorage.removeItem("userId");
-      localStorage.removeItem("email");
-      localStorage.removeItem("username");
-      localStorage.removeItem("authToken"); // Clear authToken
-      localStorage.removeItem("sessionToken"); // Clear sessionToken
-
-      // Redirect to the appropriate login page after clearing tokens
-      const baseLoginPath = currentPath.startsWith('/mobile') ? '/mobile/login' : '/desktop/login';
-      window.location.href = baseLoginPath;
+    if (response.status === 401) {
+      console.warn("Unauthorized request. Auth or session token might be expired or invalid. Redirecting to /.");
+      // Clear all relevant tokens and user data on 401
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('sessionToken');
+      localStorage.removeItem('userId');
+      localStorage.removeItem('email');
+      localStorage.removeItem('username');
+      window.location.href = "/"; // Redirect to home/login page
       return null;
     }
     if (!response.ok) {
-      // Attempt to parse error body if available, otherwise use statusText
-      const errorBody = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(`API Error ${response.status}: ${errorBody.message || response.statusText}`);
+      throw new Error(`API Error: ${response.statusText} (Status: ${response.status})`);
     }
 
     return await response.json();
   } catch (error) {
     console.error("Fetch Error:", error);
-    // You might want to re-throw a more specific error or return a structured error object
     return null;
   }
 }
