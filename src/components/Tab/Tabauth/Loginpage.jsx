@@ -51,6 +51,7 @@ const Login = () => {
         return;
       }
 
+      // --- START: MODIFICATIONS FOR TOKEN STORAGE ---
       // Save user details locally.
       const user = responseData.user;
       if (user) {
@@ -58,6 +59,15 @@ const Login = () => {
         localStorage.setItem('email', user.email);
         localStorage.setItem('username', user.username);
       }
+
+      // Store authToken and sessionToken from the response in localStorage.
+      if (responseData.authToken) {
+        localStorage.setItem('authToken', responseData.authToken);
+      }
+      if (responseData.sessionToken) {
+        localStorage.setItem('sessionToken', responseData.sessionToken);
+      }
+      // --- END: MODIFICATIONS FOR TOKEN STORAGE ---
 
       // Tokens are set as HTTP-only cookies by the server.
       // Redirect to home.

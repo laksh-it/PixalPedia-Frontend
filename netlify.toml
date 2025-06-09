@@ -1,0 +1,29 @@
+# netlify.toml
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://pixalpedia-backend.onrender.com/:splat"
+  status = 200
+  force = true
+
+# New rules for public auth endpoints without /api prefix
+[[redirects]]
+  from = "/signup"
+  to = "https://pixalpedia-backend.onrender.com/signup"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/login"
+  to = "https://pixalpedia-backend.onrender.com/login"
+  status = 200
+  force = true
+
+  [[redirects]]
+  from = "/auth"
+  to = "https://pixalpedia-backend.onrender.com/login"
+  status = 200
+  force = true
+
+# ... repeat for all other public auth routes
+# /request-password-reset-otp, /reset-password-with-otp, /verify-email-with-otp, /resend-otp, /check-username

@@ -2,81 +2,106 @@ import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import wrapperFetch from '../Middleware/wrapperFetch';
 
-const GoogleAuth = () => {
+const GithubAuth = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    const handleGoogleAuth = async () => {
+    const handleGithubAuth = async () => {
       try {
         const urlParams = new URLSearchParams(location.search);
+        // Keep backendUrl as full URL for direct OAuth redirects if needed for initial calls
+        // For subsequent proxied API calls, wrapperFetch handles it.
         const backendUrl = process.env.REACT_APP_BACKEND_URL;
 
-        // --- Retrieve device type from localStorage ---
         const deviceType = localStorage.getItem('deviceType') || 'tablet';
-        // ----------------------------------------------------
-        
-        // Check if we're coming from OAuth redirect with user data in URL
+
+        // Check if we're coming from OAuth redirect with user data AND tokens in URL
         const userDataParam = urlParams.get('user');
         const authTokenParam = urlParams.get('authToken');
         const sessionTokenParam = urlParams.get('sessionToken');
         const errorParam = urlParams.get('error');
 
         if (errorParam) {
-          console.error("Google authentication failed:", errorParam);
-          navigate('/desktop/login');
-          return;
-        }
-
-        if (userDataParam && authTokenParam && sessionTokenParam) {
-          // Method 1: Get data from URL params (immediate)
-          try {
-            const userData = JSON.parse(decodeURIComponent(userDataParam));
-            
-            // Save user details to localStorage
-            localStorage.setItem('userId', userData.id);
-            localStorage.setItem('email', userData.email);
-            localStorage.setItem('username', userData.username);
-            
-            console.log("Google authentication successful:", userData);
-            navigate(`/${deviceType}/Setuprofile`);
-            return;
-          } catch (parseError) {
-            console.error("Error parsing user data from URL:", parseError);
-          }
-        }
-
-        // Method 2: Fetch user data from backend (fallback)
-        const responseData = await wrapperFetch(`${backendUrl}/auth/google/user`, {
-          method: 'GET',
-          credentials: 'include' // Include cookies
-        });
-
-        if (!responseData || responseData.error) {
-          console.error("Google authentication failed:", responseData?.error);
+          console.error("GitHub authentication failed:", errorParam);
           navigate(`/${deviceType}/login`);
           return;
         }
 
-        // Save user details
-        const user = responseData.user;
-        localStorage.setItem('userId', user.id);
-        localStorage.setItem('email', user.email);
-        localStorage.setItem('username', user.username);
+        // --- Scenario 1: Tokens and user data received directly via URL params ---
+        if (userDataParam && authTokenParam && sessionTokenParam) {
+          try {
+            const userData = JSON.parse(decodeURIComponent(userDataParam));
 
-        console.log("Google authentication successful:", responseData);
+            // Save user details locally from the URL parameter
+            if (userData) {
+              localStorage.setItem('userId', userData.id);
+              localStorage.setItem('email', userData.email);
+              localStorage.setItem('username', userData.username);
+            }
+
+            // Store authToken and sessionToken directly from URL parameters
+            localStorage.setItem('authToken', authTokenParam);
+            localStorage.setItem('sessionToken', sessionTokenParam);
+
+            console.log("GitHub authentication successful (from URL):", userData);
+            navigate(`/${deviceType}/Setuprofile`);
+            return; // Exit as we've handled the authentication
+          } catch (parseError) {
+            console.error("Error parsing user data from URL:", parseError);
+            // If parsing fails, you might want to try Method 2 as a fallback,
+            // or navigate to login directly based on severity of parse error.
+            // For now, we'll let it fall through to Method 2.
+          }
+        }
+
+        // --- Scenario 2: No tokens in URL params, or parsing failed. Fetch user data from backend ---
+        // This 'wrapperFetch' call should now implicitly include Authorization headers
+        // if the user's browser has already received them (e.g., from the OAuth redirect itself
+        // or a previous login).
+        // Since you've removed res.cookie calls, 'credentials: 'include'' is no longer relevant
+        // for *getting* cookies from this specific fetch response.
+        // If your backend for /auth/github/user sends JSON tokens, wrapperFetch will handle them.
+        const responseData = await wrapperFetch(`${backendUrl}/auth/github/user`, {
+          method: 'GET',
+          // credentials: 'omit' // Explicitly 'omit' if not expecting any cookies, or remove if wrapperFetch defaults
+        });
+
+        if (!responseData || responseData.error) {
+          console.error("GitHub authentication failed:", responseData?.error || "No data received.");
+          navigate(`/${deviceType}/login`);
+          return;
+        }
+
+        // Save user details from the fetch response
+        const user = responseData.user;
+        if (user) {
+          localStorage.setItem('userId', user.id);
+          localStorage.setItem('email', user.email);
+          localStorage.setItem('username', user.username);
+        }
+
+        // Store authToken and sessionToken from the fetch response
+        if (responseData.authToken) {
+          localStorage.setItem('authToken', responseData.authToken);
+        }
+        if (responseData.sessionToken) {
+          localStorage.setItem('sessionToken', responseData.sessionToken);
+        }
+
+        console.log("GitHub authentication successful (from fetch):", responseData);
         navigate(`/${deviceType}/Setuprofile`);
       } catch (error) {
-        console.error("Google authentication error:", error);
+        console.error("GitHub authentication error:", error);
         const deviceTypeOnError = localStorage.getItem('deviceType') || 'tablet';
         navigate(`/${deviceTypeOnError}/login`);
       }
     };
 
-    handleGoogleAuth();
-  }, [navigate, location]);
+    handleGithubAuth();
+  }, [navigate, location, backendUrl]); // Added backendUrl to dependencies for robustness
 
-  return <div>Authenticating Google login...</div>;
+  return <div>Authenticating GitHub login...</div>;
 };
 
-export default GoogleAuth;
+export default GithubAuth;

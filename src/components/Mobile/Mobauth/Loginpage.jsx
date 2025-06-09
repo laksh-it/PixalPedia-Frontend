@@ -45,12 +45,23 @@ const Login = () => {
         return;
       }
 
+      // --- START: MODIFICATIONS FOR TOKEN STORAGE ---
+      // Save user details locally.
       const user = responseData.user;
       if (user) {
         localStorage.setItem('userId', user.id);
         localStorage.setItem('email', user.email);
         localStorage.setItem('username', user.username);
       }
+
+      // Store authToken and sessionToken from the response in localStorage.
+      if (responseData.authToken) {
+        localStorage.setItem('authToken', responseData.authToken);
+      }
+      if (responseData.sessionToken) {
+        localStorage.setItem('sessionToken', responseData.sessionToken);
+      }
+      // --- END: MODIFICATIONS FOR TOKEN STORAGE ---
 
       navigate('/mobile/Setuprofile');
     } catch (err) {
