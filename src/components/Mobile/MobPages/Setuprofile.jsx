@@ -305,7 +305,7 @@ const ProfileSetup = () => {
         setSuccessMessage('Profile created successfully!');
         localStorage.setItem('username', username.trim()); // Update localStorage with new username
         setTimeout(() => {
-          navigate('/tablet/Home'); // Navigate to desktop home after setup
+          navigate('/mobile/Home'); // Navigate to desktop home after setup
         }, 2000);
       } else {
         setError(response?.message || 'Failed to create profile. Please try again.');
