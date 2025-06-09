@@ -164,7 +164,7 @@ const LoadingValidation = () => {
       const endpoint = `${backendUrl}/api/auth/vailed`;
       const response = await wrapperFetch(endpoint);
 
-      if (response && (response.status === 304 || response.valid === true)) {
+      if (response && response.valid === true) {
         setMessage('Redirecting...');
         setTimeout(() => {
           window.location.href = homePath;
