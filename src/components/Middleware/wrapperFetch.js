@@ -61,6 +61,16 @@ export default async function wrapperFetch(url, options = {}) {
     "/desktop/Forgotpassword",
     "/desktop/Resetpassword",
     "/desktop/Confirmemail",
+    "/mobile/login",
+    "/mobile/signup",
+    "/mobile/Forgotpassword",
+    "/mobile/Resetpassword",
+    "/mobile/Confirmemail",
+    "/tablet/login",
+    "/tablet/signup",
+    "/tablet/Forgotpassword",
+    "/tablet/Resetpassword",
+    "/tablet/Confirmemail",
   ];
   const currentPath = window.location.pathname;
   const isPublicPage = publicPaths.includes(currentPath);
