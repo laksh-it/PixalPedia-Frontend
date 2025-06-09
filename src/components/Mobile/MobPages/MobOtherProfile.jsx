@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import MainLayout from '../Mobelements/MainlayoutMob';
 import wrapperFetch from '../../Middleware/wrapperFetch';
-import WallpaperCard from '../../Tab/elements/TabWallpapercard'; // Keep WallpaperCard for the detailed view
+import WallpaperCard from '../Mobelements/MobWallpaperCard'; // Keep WallpaperCard for the detailed view
 import UserCard from '../Mobelements/MobUserCard';
 import ReportModal from '../../elements/ReportModal';
 import SimpleWallpaperGridItem from '../Mobelements/SimpleWallpaperGridItem'; // <--- NEW IMPORT
