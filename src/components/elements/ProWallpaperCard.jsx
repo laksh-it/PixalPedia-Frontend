@@ -198,8 +198,7 @@ const handleDownload = async (e) => {
     try {
       const link = document.createElement('a');
       link.href = imageUrlToDownload;
-      link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
-      link.target = '_blank'; // This helps Safari handle the download better
+      link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;// This helps Safari handle the download better
       link.rel = 'noopener noreferrer';
       
       // Temporarily add to DOM
