@@ -1,8 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import GlobalSessionErrorOverlay from './components/Middleware/GlobalErrorOverlay'; // Import the new overlay component
 
 // Import your pages/components
-import LoadingPage from './components/setup/LoadingPage'; // <-- New Loading Page
+import LoadingPage from './components/setup/LoadingPage';
 import Home from './components/pages/Home';
 import ProfileUser from './components/pages/OtherProfile';
 import Profile from './components/pages/Profile';
@@ -42,6 +43,7 @@ import TabForgotpassword from './components/Tab/Tabauth/Forgotpassword';
 import TabResetpassword from './components/Tab/Tabauth/Resetpassword';
 import TabConfirmemail from './components/Tab/Tabauth/Confirmemail';
 
+// Import mobile components
 import MobileHome from './components/Mobile/MobPages/Home';
 import MobileGallery from './components/Mobile/MobPages/MobGallery';
 import MobileGallerywallpaper from './components/Mobile/MobPages/MobCategoryWallpapers';
@@ -60,14 +62,19 @@ import MobileForgotpassword from './components/Mobile/Mobauth/Forgotpassword';
 import MobileResetpassword from './components/Mobile/Mobauth/Resetpassword';
 import MobileConfirmemail from './components/Mobile/Mobauth/Confirmemail';
 
+
 function App() {
   return (
     <Router>
+      {/* The GlobalSessionErrorOverlay should be rendered at the highest level possible */}
+      {/* This ensures it can overlay any content rendered by the routes */}
+      <GlobalSessionErrorOverlay />
+
       <Routes>
         {/* Initial Loading Page */}
         <Route path="/" element={<LoadingPage />} />
 
-        {/* Desktop Routes (as per your existing setup) */}
+        {/* Desktop Routes */}
         <Route path="/desktop/Home" element={<Home />} />
         <Route path="/desktop/Profile/:profileId" element={<ProfileUser />} />
         <Route path="/desktop/Profile" element={<Profile />} />
@@ -86,11 +93,8 @@ function App() {
         <Route path="/desktop/Forgotpassword" element={<Forgotpassword />} />
         <Route path="/desktop/Resetpassword" element={<Resetpassword />} />
         <Route path="/desktop/Confirmemail" element={<Confirmemail />} />
-        {/* OAuth Callback routes for desktop */}
-        <Route path="/auth/google/callback" element={<GoogleAuth />} />
-        <Route path="/auth/github/callback" element={<GithubAuth />} />
 
-        {/* Mobile Routes (placeholders - replace with your actual components) */}
+        {/* Mobile Routes */}
         <Route path="/mobile/Home" element={<MobileHome />} />
         <Route path="/mobile/Setuprofile" element={<MobileSetuprofile />} />
         <Route path="/mobile/Gallery" element={<MobileGallery />} />
@@ -109,9 +113,8 @@ function App() {
         <Route path="/mobile/Forgotpassword" element={<MobileForgotpassword />} />
         <Route path="/mobile/Resetpassword" element={<MobileResetpassword />} />
         <Route path="/mobile/Confirmemail" element={<MobileConfirmemail />} />
-        {/* Add other mobile-specific routes here */}
 
-        {/* Tablet Routes (placeholders - replace with your actual components) */}
+        {/* Tablet Routes */}
         <Route path="/tablet/Home" element={<TabHome />} />
         <Route path="/tablet/Profile/:profileId" element={<TabProfileUser />} />
         <Route path="/tablet/Profile" element={<TabProfile />} />
@@ -130,10 +133,9 @@ function App() {
         <Route path="/tablet/Forgotpassword" element={<TabForgotpassword />} />
         <Route path="/tablet/Resetpassword" element={<TabResetpassword />} />
         <Route path="/tablet/Confirmemail" element={<TabConfirmemail />} />
-        {/* Add other tablet-specific routes here */}
 
-        {/* OAuth Callback routes (if they are device-agnostic, keep them here) */}
-        {/* If your OAuth callbacks need to redirect to device-specific pages, you'll need to handle that logic within GoogleAuth/GithubAuth components */}
+        {/* OAuth Callback routes (device-agnostic) */}
+        {/* These routes are typically independent of device type as they handle redirects from external providers */}
         <Route path="/auth/google/callback" element={<GoogleAuth />} />
         <Route path="/auth/github/callback" element={<GithubAuth />} />
       </Routes>

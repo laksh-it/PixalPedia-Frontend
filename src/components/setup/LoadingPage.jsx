@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import wrapperFetch from '../Middleware/wrapperFetch'; // Adjust path as needed
-import logobr from "../Web Image/logo.png"; // Your logo import
+import logobr from "../Web Image/logoStrip.png"; // Your logo import
 
 const LoadingValidation = () => {
   const [message, setMessage] = useState('Initializing...');

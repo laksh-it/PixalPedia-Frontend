@@ -129,7 +129,7 @@ const sidebarItems = [
   { name: 'Gallery', icon: 'fas fa-images', path: '/desktop/gallery' },
   { name: 'Insights', icon: 'fas fa-chart-line', path: '/desktop/insights' }, // New option replacing Notifications
   { name: 'Settings', icon: 'fas fa-cog', path: '/desktop/Settings' },
-  { name: 'More', icon: 'fas fa-bars', path: '/desktop/More' }
+  { name: 'More', icon: 'fas fa-bars', path: '/desktop/More' },
 ];
 
   return (

@@ -107,6 +107,7 @@ const MainLayout = ({
     { name: 'Gallery', icon: 'fas fa-images', path: '/tablet/gallery', label: 'Gallery' },
     { name: 'Insights', icon: 'fas fa-chart-line', path: '/tablet/insights', label: 'Insights' },
     { name: 'Settings', icon: 'fas fa-cog', path: '/tablet/Settings', label: 'Settings' },
+    { name: 'More', icon: 'fas fa-bars', path: '/tablet/More', label: 'More' },
   ];
 
   // Reverting to previous sidebar/header dimensions for icon-only mode

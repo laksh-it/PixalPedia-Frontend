@@ -5,7 +5,7 @@ import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { setCanvasPreview } from '../../utils/canvasPreview';
 import debounce from 'lodash.debounce';
-import logobr from "../../Web Image/logo.png"; // Import your logo image
+import logobr from "../../Web Image/logoStrip.png"; // Import your logo image
 
 const ProfileSetup = () => {
   const [dpFile, setDpFile] = useState(null);
