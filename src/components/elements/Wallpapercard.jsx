@@ -188,32 +188,7 @@ const handleDownload = async (e) => {
 
   const imageUrlToDownload = transformImageUrl(currentWallpaper.image_url);
 
-  // Safari-specific detection
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-  
-  if (isSafari) {
-    // For Safari, use direct link approach immediately
-    try {
-      const link = document.createElement('a');
-      link.href = imageUrlToDownload;
-      link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;// This helps Safari handle the download better
-      link.rel = 'noopener noreferrer';
-      
-      // Temporarily add to DOM
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      return;
-    } catch (safariError) {
-      console.error('Safari direct download failed:', safariError);
-      // If direct download fails, open in new tab as last resort
-      window.open(imageUrlToDownload, '_blank');
-      return;
-    }
-  }
-
-  // For other browsers (Chrome, Firefox, etc.), use blob method
+  // Try blob method for all browsers first
   try {
     const response = await fetch(imageUrlToDownload, {
       method: 'GET',
@@ -227,38 +202,39 @@ const handleDownload = async (e) => {
     }
     
     const blob = await response.blob();
-    
-    // Ensure proper MIME type for the blob
     const properBlob = new Blob([blob], { type: 'image/jpeg' });
-
     const url = window.URL.createObjectURL(properBlob);
+    
     const link = document.createElement('a');
     link.href = url;
     link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
     
-    // Add to DOM temporarily
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
-    // Clean up
     setTimeout(() => {
       window.URL.revokeObjectURL(url);
     }, 100);
     
   } catch (downloadError) {
-    console.error('Error with blob download:', downloadError);
-    console.warn('Falling back to direct link download due to error:', downloadError);
+    console.error('Blob download failed:', downloadError);
     
-    // Fallback to direct link
-    const link = document.createElement('a');
-    link.href = imageUrlToDownload;
-    link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Safari-specific fallback
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    
+    if (isSafari) {
+      // Last resort for Safari - open in new tab
+      window.open(imageUrlToDownload, '_blank');
+    } else {
+      // Direct link fallback for other browsers
+      const link = document.createElement('a');
+      link.href = imageUrlToDownload;
+      link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   }
 };
 
