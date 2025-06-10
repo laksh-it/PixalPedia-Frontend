@@ -1,5 +1,5 @@
 // src/components/WallpaperCard.js (Updated)
-import React, { useState, useRef, useEffect } from 'react'; // Added useEffect
+import React, { useState, useRef, useEffect } from 'react';
 import wrapperFetch from '../../Middleware/wrapperFetch';
 import { useNavigate } from 'react-router-dom';
 import UserCard from './MobUserCard';
@@ -10,12 +10,13 @@ const WallpaperCard = ({
   userId
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [isTapped, setIsTapped] = useState(false); // New state for touch interaction
+  const [isTapped, setIsTapped] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentWallpaper, setCurrentWallpaper] = useState(wallpaper);
   const [isLiking, setIsLiking] = useState(false);
   const [hasViewBeenTracked, setHasViewBeenTracked] = useState(false);
   const hoverTimeoutRef = useRef(null);
+  const longPressTimeoutRef = useRef(null); // New ref for long press timer
 
   // States for Modals
   const [showLikesModal, setShowLikesModal] = useState(false);
@@ -24,7 +25,7 @@ const WallpaperCard = ({
   const [showReportModal, setShowReportModal] = useState(false);
 
   const navigate = useNavigate();
-  const cardRef = useRef(null); // Ref for the card itself
+  const cardRef = useRef(null);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL;
   const wallpaperPageBaseUrl = `${window.location.origin}/mobile/wallpaper`;
@@ -164,47 +165,95 @@ const WallpaperCard = ({
     }
   };
 
-  const handleDownload = async (e) => {
-    e.stopPropagation();
+const handleDownload = async (e) => {
+  e.stopPropagation();
 
+  try {
+    await updateMetrics('download');
+    setCurrentWallpaper(prev => ({
+      ...prev,
+      download_count: prev.download_count + 1
+    }));
+  } catch (error) {
+    console.error('Error tracking download:', error);
+  }
+
+  const imageUrlToDownload = transformImageUrl(currentWallpaper.image_url);
+
+  // Safari-specific detection
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  
+  if (isSafari) {
+    // For Safari, use direct link approach immediately
     try {
-      await updateMetrics('download');
-      setCurrentWallpaper(prev => ({
-        ...prev,
-        download_count: prev.download_count + 1
-      }));
-    } catch (error) {
-      console.error('Error tracking download:', error);
-    }
-
-    const imageUrlToDownload = transformImageUrl(currentWallpaper.image_url);
-
-    try {
-      const response = await fetch(imageUrlToDownload);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const blob = await response.blob();
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (downloadError) {
-      console.error('Error initiating download:', downloadError);
-      console.warn('Falling back to direct link download due to error:', downloadError);
       const link = document.createElement('a');
       link.href = imageUrlToDownload;
       link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+      link.target = '_blank'; // This helps Safari handle the download better
+      link.rel = 'noopener noreferrer';
+      
+      // Temporarily add to DOM
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      return;
+    } catch (safariError) {
+      console.error('Safari direct download failed:', safariError);
+      // If direct download fails, open in new tab as last resort
+      window.open(imageUrlToDownload, '_blank');
+      return;
     }
-  };
+  }
+
+  // For other browsers (Chrome, Firefox, etc.), use blob method
+  try {
+    const response = await fetch(imageUrlToDownload, {
+      method: 'GET',
+      headers: {
+        'Accept': 'image/jpeg,image/jpg,image/png,image/webp,image/*,*/*'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    
+    // Ensure proper MIME type for the blob
+    const properBlob = new Blob([blob], { type: 'image/jpeg' });
+
+    const url = window.URL.createObjectURL(properBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+    
+    // Add to DOM temporarily
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+    }, 100);
+    
+  } catch (downloadError) {
+    console.error('Error with blob download:', downloadError);
+    console.warn('Falling back to direct link download due to error:', downloadError);
+    
+    // Fallback to direct link
+    const link = document.createElement('a');
+    link.href = imageUrlToDownload;
+    link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};
 
   const handleShare = async (e) => {
     e.stopPropagation();
@@ -298,25 +347,54 @@ const WallpaperCard = ({
   const handleCardWallpaperClick = (e) => {
     // If on a touch device or tapped, first click reveals overlay, second navigates
     // On desktop, regular hover behavior (or direct click if not hovering)
-    if (isTapped) { // If it's already tapped, this is the second click, so navigate
-      e.stopPropagation(); // Stop propagation for the first element of the click if it's not the card itself
+    if (isTapped) {
+      e.stopPropagation();
       navigate(`/mobile/wallpaper/${currentWallpaper.id}`);
-    } else { // First click, reveal overlay
-      e.stopPropagation(); // Prevent immediate navigation
+    } else {
+      e.stopPropagation();
       setIsTapped(true);
-      // Trigger view tracking on first tap/hover
       handleView();
     }
   };
 
-  const handleCardHashtagClick = (hashtag, e) => { // Added 'e' to stop propagation
-    e.stopPropagation(); // Prevent the main card click from triggering navigation
+  const handleCardHashtagClick = (hashtag, e) => {
+    e.stopPropagation();
     navigate('/mobile/home', { state: { hashtag: hashtag } });
   };
 
   const handleContextMenu = (e) => {
     e.preventDefault();
   };
+
+  // --- New long-press handling ---
+  const handleTouchStart = (e) => {
+    // Prevent default touch start behavior (like text selection)
+    e.stopPropagation();
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+    // Start a timer for a long press
+    longPressTimeoutRef.current = setTimeout(() => {
+      // If the timer completes, it's a long press. Prevent default.
+      e.preventDefault(); // This is crucial for preventing the context menu
+    }, 500); // Adjust this value (in milliseconds) for desired long-press duration
+  };
+
+  const handleTouchEnd = () => {
+    // Clear the timeout if the touch is released before the long press duration
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+  };
+
+  const handleTouchMove = () => {
+    // If there's significant movement, clear the timeout to prevent accidental long presses
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+  };
+  // --- End new long-press handling ---
+
 
   // Effect to close dropdown and untap if clicked outside (only for touch-like interactions)
   useEffect(() => {
@@ -330,22 +408,18 @@ const WallpaperCard = ({
       }
     };
 
-    // Add event listener when component mounts
     document.addEventListener('mousedown', handleClickOutside);
-    // Clean up event listener when component unmounts
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []); // Empty dependency array means this runs once on mount and unmount
-
+  }, []);
 
   return (
     <div
-      ref={cardRef} // Assign ref to the main div
+      ref={cardRef}
       className="relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
       onMouseEnter={() => {
         setIsHovered(true);
-        // On desktop, trigger view tracking on hover after a delay
         hoverTimeoutRef.current = setTimeout(() => {
           handleView();
         }, 3000);
@@ -357,8 +431,11 @@ const WallpaperCard = ({
           clearTimeout(hoverTimeoutRef.current);
         }
       }}
-      onClick={handleCardWallpaperClick} // Main card click now handles tap/navigate logic
+      onClick={handleCardWallpaperClick}
       onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart} // Add touch start listener
+      onTouchEnd={handleTouchEnd}     // Add touch end listener
+      onTouchMove={handleTouchMove}   // Add touch move listener
     >
       {/* Main Image - Updated to smartphone aspect ratio (9:16) for 1080x1920 dimensions */}
       <div className="aspect-[9/15] overflow-hidden relative">
@@ -495,8 +572,8 @@ const WallpaperCard = ({
                   className="text-amber-300 font-semibold text-xl cursor-pointer hover:text-white transition-colors leading-tight"
                   style={customTextStyle}
                   onClick={(e) => {
-                    e.stopPropagation(); // Prevent main card click
-                    navigate(`/mobile/wallpaper/${currentWallpaper.id}`); // Call internal handler
+                    e.stopPropagation();
+                    navigate(`/mobile/wallpaper/${currentWallpaper.id}`);
                   }}
                 >
                   {currentWallpaper.title}
@@ -507,8 +584,8 @@ const WallpaperCard = ({
                       className="text-gray-200 text-base cursor-pointer hover:text-blue-300 transition-colors line-clamp-3 leading-relaxed"
                       style={customTextStyle}
                       onClick={(e) => {
-                        e.stopPropagation(); // Prevent main card click
-                        navigate(`/mobile/wallpaper/${currentWallpaper.id}`); // Call internal handler
+                        e.stopPropagation();
+                        navigate(`/mobile/wallpaper/${currentWallpaper.id}`);
                       }}
                     >
                       {currentWallpaper.description}
@@ -518,8 +595,8 @@ const WallpaperCard = ({
                         className="text-blue-300 text-sm cursor-pointer hover:text-blue-100 transition-colors"
                         style={customTextStyle}
                         onClick={(e) => {
-                          e.stopPropagation(); // Prevent main card click
-                          navigate(`/mobile/wallpaper/${currentWallpaper.id}`); // Call internal handler
+                          e.stopPropagation();
+                          navigate(`/mobile/wallpaper/${currentWallpaper.id}`);
                         }}
                       >
                         More...
@@ -537,7 +614,7 @@ const WallpaperCard = ({
                       key={index}
                       className="text-blue-300 text-sm cursor-pointer hover:text-blue-100 transition-colors bg-black bg-opacity-20 px-2 py-1 rounded-md"
                       style={customTextStyle}
-                      onClick={(e) => handleCardHashtagClick(hashtag, e)} // Pass 'e' to stop propagation
+                      onClick={(e) => handleCardHashtagClick(hashtag, e)}
                     >
                       #{hashtag}
                     </span>
@@ -547,8 +624,8 @@ const WallpaperCard = ({
                       className="text-blue-300 text-sm cursor-pointer hover:text-blue-100 transition-colors bg-black bg-opacity-20 px-2 py-1 rounded-md"
                       style={customTextStyle}
                       onClick={(e) => {
-                        e.stopPropagation(); // Prevent main card click
-                        navigate(`/mobile/wallpaper/${currentWallpaper.id}`); // Still navigate to wallpaper detail for 'More...'
+                        e.stopPropagation();
+                        navigate(`/mobile/wallpaper/${currentWallpaper.id}`);
                       }}
                     >
                       More...
@@ -571,8 +648,8 @@ const WallpaperCard = ({
                 Likes
               </h3>
               <button
-                 onClick={(e) => { // <--- Add 'e' here
-                  e.stopPropagation(); // <--- STOP THE PROPAGATION!
+                 onClick={(e) => {
+                  e.stopPropagation();
                   setShowLikesModal(false);
                 }}
                 className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
@@ -612,8 +689,8 @@ const WallpaperCard = ({
       {/* Report Modal */}
       <ReportModal
         isOpen={showReportModal}
-        onClose={(e) => { // This assumes ReportModal passes the event object to onClose
-          if (e) e.stopPropagation(); // Only stop if an event object is passed
+        onClose={(e) => {
+          if (e) e.stopPropagation();
           setShowReportModal(false);
         }}
         elementType="wallpaper"

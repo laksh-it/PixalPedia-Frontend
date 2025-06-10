@@ -175,47 +175,95 @@ const WallpaperCard = ({
   };
 
   // Handle download - Now using Blob-based download for direct download
-  const handleDownload = async (e) => {
-    e.stopPropagation();
+const handleDownload = async (e) => {
+  e.stopPropagation();
 
+  try {
+    await updateMetrics('download');
+    setCurrentWallpaper(prev => ({
+      ...prev,
+      download_count: prev.download_count + 1
+    }));
+  } catch (error) {
+    console.error('Error tracking download:', error);
+  }
+
+  const imageUrlToDownload = transformImageUrl(currentWallpaper.image_url);
+
+  // Safari-specific detection
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  
+  if (isSafari) {
+    // For Safari, use direct link approach immediately
     try {
-      await updateMetrics('download');
-      setCurrentWallpaper(prev => ({
-        ...prev,
-        download_count: prev.download_count + 1
-      }));
-    } catch (error) {
-      console.error('Error tracking download:', error);
-    }
-
-    const imageUrlToDownload = transformImageUrl(currentWallpaper.image_url);
-
-    try {
-      const response = await fetch(imageUrlToDownload);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const blob = await response.blob();
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (downloadError) {
-      console.error('Error initiating download:', downloadError);
-      console.warn('Falling back to direct link download due to error:', downloadError);
       const link = document.createElement('a');
       link.href = imageUrlToDownload;
       link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+      link.target = '_blank'; // This helps Safari handle the download better
+      link.rel = 'noopener noreferrer';
+      
+      // Temporarily add to DOM
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      return;
+    } catch (safariError) {
+      console.error('Safari direct download failed:', safariError);
+      // If direct download fails, open in new tab as last resort
+      window.open(imageUrlToDownload, '_blank');
+      return;
     }
-  };
+  }
+
+  // For other browsers (Chrome, Firefox, etc.), use blob method
+  try {
+    const response = await fetch(imageUrlToDownload, {
+      method: 'GET',
+      headers: {
+        'Accept': 'image/jpeg,image/jpg,image/png,image/webp,image/*,*/*'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    
+    // Ensure proper MIME type for the blob
+    const properBlob = new Blob([blob], { type: 'image/jpeg' });
+
+    const url = window.URL.createObjectURL(properBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+    
+    // Add to DOM temporarily
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+    }, 100);
+    
+  } catch (downloadError) {
+    console.error('Error with blob download:', downloadError);
+    console.warn('Falling back to direct link download due to error:', downloadError);
+    
+    // Fallback to direct link
+    const link = document.createElement('a');
+    link.href = imageUrlToDownload;
+    link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};
 
   // Handle share - use Web Share API or fallback to copy to clipboard
   const handleShare = async (e) => {

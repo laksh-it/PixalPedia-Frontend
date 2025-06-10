@@ -1,5 +1,4 @@
-// src/components/WallpaperCard.js (Updated)
-import React, { useState, useRef, useEffect } from 'react'; // Added useEffect
+import React, { useState, useRef, useEffect } from 'react';
 import wrapperFetch from '../../Middleware/wrapperFetch';
 import { useNavigate } from 'react-router-dom';
 import UserCard from '../elements/TabUserCard';
@@ -7,7 +6,7 @@ import ReportModal from '../../elements/ReportModal';
 
 const WallpaperCard = ({
   wallpaper,
-  userId
+  userId // This prop seems unused, consider removing if not needed.
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isTapped, setIsTapped] = useState(false); // New state for touch interaction
@@ -16,6 +15,7 @@ const WallpaperCard = ({
   const [isLiking, setIsLiking] = useState(false);
   const [hasViewBeenTracked, setHasViewBeenTracked] = useState(false);
   const hoverTimeoutRef = useRef(null);
+  const longPressTimeoutRef = useRef(null); // New ref for long press timer
 
   // States for Modals
   const [showLikesModal, setShowLikesModal] = useState(false);
@@ -164,47 +164,95 @@ const WallpaperCard = ({
     }
   };
 
-  const handleDownload = async (e) => {
-    e.stopPropagation();
+const handleDownload = async (e) => {
+  e.stopPropagation();
 
+  try {
+    await updateMetrics('download');
+    setCurrentWallpaper(prev => ({
+      ...prev,
+      download_count: prev.download_count + 1
+    }));
+  } catch (error) {
+    console.error('Error tracking download:', error);
+  }
+
+  const imageUrlToDownload = transformImageUrl(currentWallpaper.image_url);
+
+  // Safari-specific detection
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  
+  if (isSafari) {
+    // For Safari, use direct link approach immediately
     try {
-      await updateMetrics('download');
-      setCurrentWallpaper(prev => ({
-        ...prev,
-        download_count: prev.download_count + 1
-      }));
-    } catch (error) {
-      console.error('Error tracking download:', error);
-    }
-
-    const imageUrlToDownload = transformImageUrl(currentWallpaper.image_url);
-
-    try {
-      const response = await fetch(imageUrlToDownload);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const blob = await response.blob();
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (downloadError) {
-      console.error('Error initiating download:', downloadError);
-      console.warn('Falling back to direct link download due to error:', downloadError);
       const link = document.createElement('a');
       link.href = imageUrlToDownload;
       link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+      link.target = '_blank'; // This helps Safari handle the download better
+      link.rel = 'noopener noreferrer';
+      
+      // Temporarily add to DOM
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      return;
+    } catch (safariError) {
+      console.error('Safari direct download failed:', safariError);
+      // If direct download fails, open in new tab as last resort
+      window.open(imageUrlToDownload, '_blank');
+      return;
     }
-  };
+  }
+
+  // For other browsers (Chrome, Firefox, etc.), use blob method
+  try {
+    const response = await fetch(imageUrlToDownload, {
+      method: 'GET',
+      headers: {
+        'Accept': 'image/jpeg,image/jpg,image/png,image/webp,image/*,*/*'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    
+    // Ensure proper MIME type for the blob
+    const properBlob = new Blob([blob], { type: 'image/jpeg' });
+
+    const url = window.URL.createObjectURL(properBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+    
+    // Add to DOM temporarily
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+    }, 100);
+    
+  } catch (downloadError) {
+    console.error('Error with blob download:', downloadError);
+    console.warn('Falling back to direct link download due to error:', downloadError);
+    
+    // Fallback to direct link
+    const link = document.createElement('a');
+    link.href = imageUrlToDownload;
+    link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};
 
   const handleShare = async (e) => {
     e.stopPropagation();
@@ -318,6 +366,43 @@ const WallpaperCard = ({
     e.preventDefault();
   };
 
+  // --- Long-press handling for tablet ---
+  const handleTouchStart = (e) => {
+    // Check if the target is an interactive element (button, link, etc.)
+    // If it is, we might not want to prevent its default behavior for long press
+    const isInteractiveElement = e.target.closest('button, a, input, select, textarea');
+    if (isInteractiveElement) {
+        return; // Let the interactive element handle its own touch events
+    }
+
+    // Clear any existing timeout to prevent multiple timeouts running
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+
+    // Set a timeout to trigger prevention if it's a long press
+    longPressTimeoutRef.current = setTimeout(() => {
+      e.preventDefault(); // Prevent default context menu on long press
+      console.log('Long press detected, default context menu prevented.');
+    }, 500); // 500ms is a common long-press duration
+  };
+
+  const handleTouchEnd = () => {
+    // Clear the timeout when the touch ends (either a tap or release after long press)
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+  };
+
+  const handleTouchMove = () => {
+    // If the finger moves significantly, it's not a long press, so clear the timeout
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+  };
+  // --- End long-press handling ---
+
+
   // Effect to close dropdown and untap if clicked outside (only for touch-like interactions)
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -359,8 +444,11 @@ const WallpaperCard = ({
       }}
       onClick={handleCardWallpaperClick} // Main card click now handles tap/navigate logic
       onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart} // Add touch start listener
+      onTouchEnd={handleTouchEnd}     // Add touch end listener
+      onTouchMove={handleTouchMove}   // Add touch move listener
     >
-      {/* Main Image - Updated to smartphone aspect ratio (9:16) for 1080x1920 dimensions */}
+      {/* Main Image - Updated to smartphone aspect ratio (9:15) for 1080x1920 dimensions */}
       <div className="aspect-[9/15] overflow-hidden relative">
         <img
           src={transformImageUrl(currentWallpaper.image_url)}
@@ -571,8 +659,8 @@ const WallpaperCard = ({
                 Likes
               </h3>
               <button
-                 onClick={(e) => { // <--- Add 'e' here
-                  e.stopPropagation(); // <--- STOP THE PROPAGATION!
+                 onClick={(e) => {
+                  e.stopPropagation();
                   setShowLikesModal(false);
                 }}
                 className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
@@ -612,8 +700,8 @@ const WallpaperCard = ({
       {/* Report Modal */}
       <ReportModal
         isOpen={showReportModal}
-        onClose={(e) => { // This assumes ReportModal passes the event object to onClose
-          if (e) e.stopPropagation(); // Only stop if an event object is passed
+        onClose={(e) => {
+          if (e) e.stopPropagation();
           setShowReportModal(false);
         }}
         elementType="wallpaper"

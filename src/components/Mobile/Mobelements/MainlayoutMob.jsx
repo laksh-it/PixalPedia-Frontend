@@ -1,19 +1,15 @@
 // src/Mobelements/MainlayoutMob.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react'; // Removed useCallback
 import { useNavigate, useLocation } from 'react-router-dom';
 import logo from "../../Web Image/logoStrip.png";
 import wrapperFetch from '../../Middleware/wrapperFetch';
 
 const MainLayout = ({
   children,
-  // Removed these props as their functionality is now handled internally or moved
-  // activeSidebarItem,
-  // onSidebarItemClick,
-  // username,
-  // onUserProfileClick
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const mainContentRef = useRef(null);
 
   const userId = localStorage.getItem('userId');
   const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://pixalpedia-backend.onrender.com';
@@ -37,6 +33,29 @@ const MainLayout = ({
     fontWeight: 500
   };
 
+  // Reset scroll position when route changes
+  useLayoutEffect(() => {
+    console.log('Route changed to:', location.pathname);
+
+    if (mainContentRef.current) {
+      console.log('Resetting scroll on mainContentRef');
+      mainContentRef.current.scrollTop = 0;
+    }
+
+    // Also try to reset scroll on window and document
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+
+    // Try to find and reset any scrollable elements
+    const scrollableElements = document.querySelectorAll('[class*="overflow-y-auto"]');
+    scrollableElements.forEach((element, index) => {
+      console.log(`Resetting scroll on element ${index}:`, element);
+      element.scrollTop = 0;
+    });
+
+  }, [location.pathname]);
+
   // --- Fetch User Profile ---
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -45,11 +64,12 @@ const MainLayout = ({
         setLoggedInUserProfile(null);
         localStorage.removeItem('userDp');
         localStorage.removeItem('username');
-        localStorage.removeItem('userId'); // Ensure userId is also cleared
+        localStorage.removeItem('userId');
         return;
       }
 
-      // Check if the profile is already loaded for the current user
+      // **IMPORTANT: The dependency array warning refers to this line.**
+      // If loggedInUserProfile changes, we might need to re-evaluate if we need to fetch.
       if (loggedInUserProfile?.id === userId && loggedInUserProfile?.dp && loggedInUserProfile?.username) {
         return;
       }
@@ -76,12 +96,12 @@ const MainLayout = ({
       }
     };
 
+    // Add loggedInUserProfile to the dependency array
     fetchUserProfile();
-  }, [userId, backendUrl]);
-
+  }, [userId, backendUrl, loggedInUserProfile]); // Corrected dependency array
 
   const userDp = loggedInUserProfile?.dp;
-  const username = loggedInUserProfile?.username; // Get username from internal state
+  const username = loggedInUserProfile?.username;
 
   // --- Click handler for mobile bottom nav items ---
   const handleMobileNavItemClick = (path) => {
@@ -101,12 +121,12 @@ const MainLayout = ({
     { name: 'Gallery', icon: 'fas fa-images', path: '/mobile/gallery' },
     { name: 'Create', icon: 'fas fa-plus-square', path: '/mobile/create' },
     { name: 'Saved', icon: 'fas fa-bookmark', path: '/mobile/saved' },
-    { name: 'Insights', icon: 'fas fa-chart-line', path: '/mobile/insights' }, // New 'Insights' button
+    { name: 'Insights', icon: 'fas fa-chart-line', path: '/mobile/insights' },
   ];
 
   // --- Layout Classes ---
-  const mobileHeaderHeightPx = 64; // Corresponds to h-16 (4rem * 16px/rem = 64px)
-  const mobileBottomNavHeightPx = 64; // Adjusted to h-16 (4rem * 16px/rem = 64px) - previously h-20 (80px)
+  const mobileHeaderHeightPx = 64;
+  const mobileBottomNavHeightPx = 64;
 
   return (
     <div className="min-h-screen bg-white flex flex-col md:hidden">
@@ -123,12 +143,12 @@ const MainLayout = ({
           onClick={handleHeaderProfileClick}
         >
           <span
-            className="text-white text-base truncate max-w-[80px] sm:max-w-[120px]" // Added truncate for long names
+            className="text-white text-base truncate max-w-[80px] sm:max-w-[120px]"
             style={customTextStyle}
           >
             {username || 'Guest'}
           </span>
-          <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-transparent hover:border-white transition-colors"> {/* Changed w-8 h-8 */}
+          <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-transparent hover:border-white transition-colors">
             {userDp ? (
               <img
                 src={userDp}
@@ -136,7 +156,7 @@ const MainLayout = ({
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   e.target.onerror = null;
-                  e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93My5vcmcvMjAyMDQwNDyMDAwL3N2ZyI+CjxjaXJjbGUgY3g9IjIwIiBjeT0iMTYiIHI9IjEwLjI1IiBmaWxsPSIjOUNBM0FGIi8+CjxwYXRoIGQ9Ik0wIDRWNDBDMTMuNzY5NSAzNC42OTIxIDI2LjIzMDUgMzQuNjkyMSA0MCA0MEM0MCAyNy40NzQyIDMyLjMxNjMgMTguNzYxNSAyMy42MTk4IDE0LjczMzlWMzkuNzYxMkMwIDM5Ljc4ODkgMCAzOS45OTc3IDAgNDZaIiBmaWxsPSIjNURGNjQ2MCIvPgo='; // Placeholder for user icon
+                  e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93My5vcmcvMjAyMDQwNDyMDAwL3N2ZyI+CjxjaXJjbGUgY3g9IjIwIiBjeT0iMTYiIHI9IjEwLjI1IiBmaWxsPSIjOUNBM0FGIi8+CjxwYXRoIGQ9Ik0wIDRWNDBDMTMuNzY5NSAzNC42OTIxIDI2LjIzMDUgMzQuNjkyMSA0MCA0MEM0MCAyNy40NzQyIDMyLjMxNjMgMTguNzYxNSAyMy42MTk4IDE0LjczMzlWMzkuNzYxMkMwIDM5Ljc4ODkgMCAzOS45OTc3IDAgNDZaIiBmaWxsPSIjNURGNjQ2MCIvPgo=';
                   localStorage.removeItem('userDp');
                   setLoggedInUserProfile(prev => ({ ...prev, dp: null }));
                 }}
@@ -150,14 +170,23 @@ const MainLayout = ({
         </div>
       </header>
 
-      {/* Main Content Area (white background, padded for header/footer) */}
-      <div className={`flex-1 bg-white overflow-y-auto`}
-           style={{ paddingTop: `${mobileHeaderHeightPx}px`, paddingBottom: `${mobileBottomNavHeightPx}px` }}>
-        {children}
+      {/* Main Content Container - no overflow here */}
+      <div
+        className={`flex-1 bg-white flex flex-col`}
+        style={{ paddingTop: `${mobileHeaderHeightPx}px`, paddingBottom: `${mobileBottomNavHeightPx}px` }}
+      >
+        {/* Actual scrollable content area */}
+        <main
+          key={location.pathname} // This is good for forcing re-render of children if needed for other reasons
+          ref={mainContentRef}
+          className="flex-1 overflow-y-auto"
+        >
+          {children}
+        </main>
       </div>
 
       {/* Mobile Bottom Navigation Bar (black background, fixed) */}
-      <nav className={`fixed bottom-0 left-0 right-0 z-20 bg-black h-16 flex items-center justify-around border-t border-gray-800`}> {/* Changed h-20 to h-16 */}
+      <nav className={`fixed bottom-0 left-0 right-0 z-20 bg-black h-16 flex items-center justify-around border-t border-gray-800`}>
         {mobileNavItems.map((item) => (
           <button
             key={item.name}
@@ -166,8 +195,7 @@ const MainLayout = ({
               location.pathname.startsWith(item.path) ? 'text-white' : 'text-gray-400 hover:text-white'
             }`}
           >
-            <i className={`${item.icon} text-2xl`}></i> {/* Changed text-xl to text-2xl and removed mb-1 */}
-            {/* Removed <span>{item.name}</span> */}
+            <i className={`${item.icon} text-2xl`}></i>
           </button>
         ))}
       </nav>

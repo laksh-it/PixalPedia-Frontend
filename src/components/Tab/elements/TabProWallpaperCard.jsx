@@ -16,6 +16,7 @@ const WallpaperCard = ({
   const [hasViewBeenTracked, setHasViewBeenTracked] = useState(false);
   const hoverTimeoutRef = useRef(null);
   const cardRef = useRef(null);
+  const longPressTimeoutRef = useRef(null); // New ref for long press timer
 
   const [showLikesModal, setShowLikesModal] = useState(false);
   const [wallpaperLikes, setWallpaperLikes] = useState([]);
@@ -166,47 +167,95 @@ const WallpaperCard = ({
     }
   };
 
-  const handleDownload = async (e) => {
-    e.stopPropagation();
+const handleDownload = async (e) => {
+  e.stopPropagation();
 
+  try {
+    await updateMetrics('download');
+    setCurrentWallpaper(prev => ({
+      ...prev,
+      download_count: prev.download_count + 1
+    }));
+  } catch (error) {
+    console.error('Error tracking download:', error);
+  }
+
+  const imageUrlToDownload = transformImageUrl(currentWallpaper.image_url);
+
+  // Safari-specific detection
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  
+  if (isSafari) {
+    // For Safari, use direct link approach immediately
     try {
-      await updateMetrics('download');
-      setCurrentWallpaper(prev => ({
-        ...prev,
-        download_count: prev.download_count + 1
-      }));
-    } catch (error) {
-      console.error('Error tracking download:', error);
-    }
-
-    const imageUrlToDownload = transformImageUrl(currentWallpaper.image_url);
-
-    try {
-      const response = await fetch(imageUrlToDownload);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const blob = await response.blob();
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (downloadError) {
-      console.error('Error initiating download:', downloadError);
-      console.warn('Falling back to direct link download due to error:', downloadError);
       const link = document.createElement('a');
       link.href = imageUrlToDownload;
       link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+      link.target = '_blank'; // This helps Safari handle the download better
+      link.rel = 'noopener noreferrer';
+      
+      // Temporarily add to DOM
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      return;
+    } catch (safariError) {
+      console.error('Safari direct download failed:', safariError);
+      // If direct download fails, open in new tab as last resort
+      window.open(imageUrlToDownload, '_blank');
+      return;
     }
-  };
+  }
+
+  // For other browsers (Chrome, Firefox, etc.), use blob method
+  try {
+    const response = await fetch(imageUrlToDownload, {
+      method: 'GET',
+      headers: {
+        'Accept': 'image/jpeg,image/jpg,image/png,image/webp,image/*,*/*'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    
+    // Ensure proper MIME type for the blob
+    const properBlob = new Blob([blob], { type: 'image/jpeg' });
+
+    const url = window.URL.createObjectURL(properBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+    
+    // Add to DOM temporarily
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+    }, 100);
+    
+  } catch (downloadError) {
+    console.error('Error with blob download:', downloadError);
+    console.warn('Falling back to direct link download due to error:', downloadError);
+    
+    // Fallback to direct link
+    const link = document.createElement('a');
+    link.href = imageUrlToDownload;
+    link.download = `${currentWallpaper.title || 'wallpaper'}.jpg`;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};
 
   const handleShare = async (e) => {
     e.stopPropagation();
@@ -369,6 +418,30 @@ const WallpaperCard = ({
     e.preventDefault();
   };
 
+  // --- Long-press handling for tablet ---
+  const handleTouchStart = (e) => {
+    e.stopPropagation(); // Stop event bubbling
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+    longPressTimeoutRef.current = setTimeout(() => {
+      e.preventDefault(); // Prevent default context menu on long press
+    }, 500); // 500ms is a common long-press duration
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+  };
+
+  const handleTouchMove = () => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+    }
+  };
+  // --- End long-press handling ---
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (cardRef.current && !cardRef.current.contains(event.target)) {
@@ -410,6 +483,9 @@ const WallpaperCard = ({
       }}
       onClick={handleCardClick}
       onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart} // Add touch start listener
+      onTouchEnd={handleTouchEnd}     // Add touch end listener
+      onTouchMove={handleTouchMove}   // Add touch move listener
     >
       {/* Main Image Container */}
       <div className="aspect-[9/15] overflow-hidden relative">
@@ -694,8 +770,8 @@ const WallpaperCard = ({
                 Likes
               </h3>
               <button
-                 onClick={(e) => { // <--- Add 'e' here
-                  e.stopPropagation(); // <--- STOP THE PROPAGATION!
+                 onClick={(e) => {
+                  e.stopPropagation();
                   setShowLikesModal(false);
                 }}
                 className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
@@ -717,7 +793,6 @@ const WallpaperCard = ({
                     loggedInUserId={loggedInUserId}
                     onProfileClick={(profileId) => {
                       setShowLikesModal(false);
-                      // Navigate directly from here, assuming desktop path
                       navigate(`/tablet/profile/${profileId}`);
                     }}
                   />
@@ -735,8 +810,8 @@ const WallpaperCard = ({
       {/* Report Modal */}
       <ReportModal
         isOpen={showReportModal}
-        onClose={(e) => { // This assumes ReportModal passes the event object to onClose
-          if (e) e.stopPropagation(); // Only stop if an event object is passed
+        onClose={(e) => {
+          if (e) e.stopPropagation();
           setShowReportModal(false);
         }}
         elementType="wallpaper"

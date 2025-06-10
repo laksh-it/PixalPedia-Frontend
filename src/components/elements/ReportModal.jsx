@@ -1,14 +1,14 @@
-// src/elements/ReportModal.js
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import wrapperFetch from '../Middleware/wrapperFetch';
 
 // Define the character limit for the report reason
-const REPORT_REASON_CHAR_LIMIT = 15;
+const REPORT_REASON_CHAR_LIMIT = 20;
+const backendUrl = process.env.REACT_APP_BACKEND_URL;
 
 const ReportModal = ({
   isOpen,
   onClose,
-  elementType, // 'wallpaper', 'profile', or 'user'
+  elementType, // 'wallpaper', 'profile', or 'user'  
   elementId,    // The ID of the wallpaper, profile, or user being reported
   onReportSuccess, // Callback for successful report submission
 }) => {
@@ -42,13 +42,13 @@ const ReportModal = ({
     setSuccess(null);
   }, [isOpen, elementId, elementType]);
 
-
   // Close modal on outside click (if it's not the modal content itself)
-  const handleClickOutside = (event) => {
+  // Wrapped in useCallback for stability
+  const handleClickOutside = useCallback((event) => {
     if (modalRef.current && !modalRef.current.contains(event.target)) {
       onClose();
     }
-  };
+  }, [modalRef, onClose]);
 
   // Add and remove event listener for outside clicks
   useEffect(() => {
@@ -60,8 +60,7 @@ const ReportModal = ({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen]);
-
+  }, [isOpen, handleClickOutside]);
 
   const handleReasonChange = (e) => {
     const selectedReason = e.target.value;
@@ -78,6 +77,7 @@ const ReportModal = ({
 
   const handleSubmitReport = async (e) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent event bubbling
     setError(null);
     setSuccess(null);
     setIsSubmitting(true);
@@ -106,7 +106,7 @@ const ReportModal = ({
     }
 
     try {
-      const response = await wrapperFetch('http://localhost:3000/api/report', { // Use the full URL
+      const response = await wrapperFetch(`${backendUrl}/api/report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,9 +121,9 @@ const ReportModal = ({
 
       if (response && response.message) {
         setSuccess(response.message);
-        onReportSuccess && onReportSuccess(); // Trigger callback
+        onReportSuccess && onReportSuccess();
         setTimeout(() => {
-          onClose(); // Close modal after a short delay
+          onClose();
         }, 1500);
       } else {
         setError(response?.error || 'Failed to submit report. Please try again.');
@@ -136,11 +136,36 @@ const ReportModal = ({
     }
   };
 
+  // Handle clicks on the modal overlay (background)
+  const handleOverlayClick = (e) => {
+    e.stopPropagation(); // Prevent event from bubbling up
+    if (e.target === e.currentTarget) {
+      // Only close if clicking directly on the overlay, not on modal content
+      onClose();
+    }
+  };
+
+  // Handle clicks on the modal content to prevent closing
+  const handleModalContentClick = (e) => {
+    e.stopPropagation(); // Prevent any event bubbling
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div ref={modalRef} className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+      onClick={handleOverlayClick} // Handle overlay clicks
+      onMouseDown={(e) => e.stopPropagation()} // Prevent mousedown from bubbling
+      onMouseUp={(e) => e.stopPropagation()} // Prevent mouseup from bubbling
+    >
+      <div 
+        ref={modalRef} 
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col"
+        onClick={handleModalContentClick} // Prevent modal content clicks from closing
+        onMouseDown={(e) => e.stopPropagation()} // Prevent mousedown from bubbling
+        onMouseUp={(e) => e.stopPropagation()} // Prevent mouseup from bubbling
+      >
         {/* Modal Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center">
@@ -150,7 +175,10 @@ const ReportModal = ({
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent event bubbling
+              onClose();
+            }}
             className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
           >
             <i className="fas fa-times text-xl"></i>
@@ -172,7 +200,11 @@ const ReportModal = ({
 
           <form onSubmit={handleSubmitReport} className="space-y-4">
             <div>
-              <label htmlFor="reason" className="block text-gray-700 text-sm font-bold mb-2" style={customTextStyle}>
+              <label 
+                htmlFor="reason" 
+                className="block text-gray-700 text-sm font-bold mb-2" 
+                style={customTextStyle}
+              >
                 Reason for reporting: <span className="text-red-500">*</span>
               </label>
               <select
@@ -180,6 +212,7 @@ const ReportModal = ({
                 className="w-full py-3 px-4 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-colors"
                 value={reason}
                 onChange={handleReasonChange}
+                onClick={(e) => e.stopPropagation()} // Prevent clicks from bubbling
                 disabled={isSubmitting}
                 style={customTextStyle}
               >
@@ -193,7 +226,11 @@ const ReportModal = ({
 
             {reason === 'Other' && (
               <div>
-                <label htmlFor="customReason" className="block text-gray-700 text-sm font-bold mb-2" style={customTextStyle}>
+                <label 
+                  htmlFor="customReason" 
+                  className="block text-gray-700 text-sm font-bold mb-2" 
+                  style={customTextStyle}
+                >
                   Specify Reason: <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -202,6 +239,7 @@ const ReportModal = ({
                   className="w-full py-3 px-4 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-colors"
                   value={customReason}
                   onChange={handleCustomReasonChange}
+                  onClick={(e) => e.stopPropagation()} // Prevent clicks from bubbling
                   maxLength={REPORT_REASON_CHAR_LIMIT}
                   placeholder={`Max ${REPORT_REASON_CHAR_LIMIT} characters`}
                   disabled={isSubmitting}
@@ -217,6 +255,7 @@ const ReportModal = ({
               type="submit"
               className="w-full py-3 px-6 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isSubmitting || (!reason && customReason.trim().length === 0)}
+              onClick={(e) => e.stopPropagation()} // Prevent clicks from bubbling
               style={customTextStyle}
             >
               {isSubmitting ? 'Submitting...' : 'Submit Report'}
