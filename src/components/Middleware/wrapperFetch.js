@@ -79,7 +79,7 @@ export default async function wrapperFetch(url, options = {}) {
   const isPublicPage = publicPaths.includes(currentPath);
 
   let defaultHeaders = {
-    'Content-Type': 'application/json', // Keep this as a default for most JSON APIs
+    // 'Content-Type': 'application/json', // Keep this as a default for most JSON APIs
     'ts': tsToken, // TS token is MANDATORY for all requests
   };
 
